@@ -6,7 +6,7 @@ Application code is newly authored for this project. The Google demo is a refere
 - Lit and its runtime dependencies — Google LLC / Lit authors. BSD-3-Clause. See `licenses/npm/` for exact notices.
 - Tauri and Rust dependencies — exact package names, versions, declared licenses, and upstream sources are in `licenses/rust-packages.json`; available license/notice files are in `licenses/rust/`.
 - CPython 3.14.8 — Python Software Foundation and contributors. The complete bundled Python license is in `licenses/python/CPython/`.
-- Pillow 12.3.0 — MIT-CMU, copyright contributors. Complete license/embedded library notices are in `licenses/python/Pillow/`.
+- Pillow 13.0.0 — MIT-CMU, copyright contributors. Complete license/embedded library notices are in `licenses/python/Pillow/`.
 - miniaudio 1.71 — Irmen de Jong (Python bindings), David Reid (miniaudio), Sean Barrett (stb_vorbis). The wheel's complete MIT license is in `licenses/python/miniaudio/`. Used for bounded MP3/FLAC decoding; no playback/capture devices are opened.
 - CFFI 2.1.1 and pycparser 3.12 — their complete wheel licenses are in `licenses/python/cffi/` and `licenses/python/pycparser/`. Pinned decoder package versions are recorded in `licenses/python/audio-decoder-packages.json`.
 - PyInstaller bootloader — GPL with the bootloader exception permitting distribution of the generated application. The full license and exception are in `licenses/python/PyInstaller/`. This is a build tool, not a requirement to install Python on the user's PC. https://pyinstaller.org/en/stable/license.html
