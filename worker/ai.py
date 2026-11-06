@@ -5,11 +5,18 @@ import hashlib, io, math
 
 PREPROCESS='pillow-exif-rgb-fit1024-jpeg95-v1'
 QUERY_PREFIX='task: search query | text: '
+AUDIO_QUERY_PREFIX='task: search result | query: '
 
 class EmbeddingBackend(Protocol):
     dimensions: int
     def text(self,text:str)->list[float]: ...
     def image(self,data:bytes)->list[float]: ...
+    def close(self)->None: ...
+
+class AudioEmbeddingBackend(Protocol):
+    dimensions: int
+    def text(self,text:str)->list[float]: ...
+    def audio(self,data:bytes)->list[float]: ...
     def close(self)->None: ...
 
 def digest(path:Path)->str:
@@ -60,3 +67,16 @@ class LiteRtBackend:
     def text(self,text): return self._vector(QUERY_PREFIX+text.strip())
     def image(self,data): return self._vector(self.Content.ImageBytes(data))
     def close(self): self.engine.close()
+
+class LiteRtAudioBackend(LiteRtBackend):
+    """Separate engine/profile; never changes the established photo pipeline."""
+    def __init__(self,model:Path,backend:str,cache:Path):
+        from litert_lm import Backend, EmbeddingEngine, EmbeddingOptions, InputOverflowStrategy, Content
+        selected=Backend.GPU() if backend=='gpu' else Backend.CPU(thread_count=4)
+        self.engine=EmbeddingEngine(str(model),backend=selected,audio_backend=selected,
+                                    cache_dir=str(cache),min_input_length=1024,max_input_length=1024)
+        self.options=EmbeddingOptions(normalize=True,input_overflow_strategy=InputOverflowStrategy.ERROR)
+        self.Content=Content
+        self.dimensions=0
+    def audio(self,data): return self._vector(self.Content.AudioBytes(data))
+    def text(self,text): return self._vector(AUDIO_QUERY_PREFIX+text.strip())

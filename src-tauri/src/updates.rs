@@ -79,5 +79,18 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
         }
     }).await.map_err(|e| e.to_string())??;
     let _ = app.emit("update-progress", json!({"installing":true}));
-    update.install(bytes).map_err(|_| "更新セットアップを起動できません。完全終了後、手動セットアップを実行してください。".into())
+    if update.install(bytes).is_err() {
+        // The Worker was stopped above so Windows could replace files. If the
+        // installer cannot start, restore the Worker instead of leaving the
+        // app running with no local search service.
+        let restart = app.clone();
+        let restored = tauri::async_runtime::spawn_blocking(move || restart_worker(&restart))
+            .await
+            .map_err(|e| e.to_string())?;
+        return Err(match restored {
+            Ok(()) => "更新セットアップを起動できません。解析Workerを再起動しました。手動セットアップを実行してください。".into(),
+            Err(_) => "更新セットアップを起動できません。アプリを再起動し、手動セットアップを実行してください。".into(),
+        });
+    }
+    Ok(())
 }

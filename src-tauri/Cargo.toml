@@ -1,6 +1,6 @@
 [package]
 name = "embeddinggemma-media-search"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 
 [build-dependencies]
@@ -14,6 +14,8 @@ win32job = "2"
 tauri-plugin-single-instance = "2"
 rfd = { version = "0.16", default-features = false, features = ["common-controls-v6"] }
 tauri-plugin-updater = "2"
+tokio = { version = "1", features = ["net", "io-util", "time", "sync"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

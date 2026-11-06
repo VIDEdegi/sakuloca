@@ -69,8 +69,10 @@ with tempfile.TemporaryDirectory(dir=root/'tmp') as temporary:
             for offset in (1000,count//2,count-60):
                 later=lib.search(text='日本語',offset=offset)
                 assert [(x['score'],x['id']) for x in later['items']]==expected[offset:offset+60]
-            assert lib.search(text='日本語',offset=100000)['offset']==100000
-            assert lib.search(text='日本語',offset=100000)['items']==[]
+            last_offset=((count-1)//60)*60
+            last_page=lib.search(text='日本語',offset=100000)
+            assert last_page['offset']==last_offset
+            assert [(x['score'],x['id']) for x in last_page['items']]==expected[last_offset:]
             cache=lib.search_cache['ranked']
             cache_bytes=sys.getsizeof(cache)+sum(sys.getsizeof(pair)+sum(sys.getsizeof(value) for value in pair) for pair in cache)
             report[str(count)]={'first_seconds':round(elapsed,6),'five_cached_pages_seconds':round(cached_pages_elapsed,6),'exact_all_candidates':True,'exact_top_1000':True,'ranking_cache_bytes':cache_bytes,'database_bytes':lib.status()['database_bytes']}

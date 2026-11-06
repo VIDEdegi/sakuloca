@@ -66,6 +66,7 @@ class ReleaseSafety(unittest.TestCase):
         source=self.path/'source';lib=Library(source)
         try:
             (source/'models').mkdir();model=source/'models/model.litertlm';model.write_bytes(b'LITERTLMtest')
+            (source/'runtime-cache').mkdir(exist_ok=True);(source/'runtime-cache/keep-source.txt').write_text('source only',encoding='utf-8')
             lib.configure(str(model),'cpu');lib.save_preferences(setup_step=3,background=True)
             target=self.path/'target';target.mkdir();result=migrate(lib,str(target));destination=Path(result['data_path'])
             self.assertTrue(source.is_dir());self.assertEqual(model.read_bytes(),b'LITERTLMtest')
@@ -74,6 +75,8 @@ class ReleaseSafety(unittest.TestCase):
                 config=json.loads(db.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
                 self.assertEqual(config['model_path'],str(destination/'models/model.litertlm'))
             self.assertEqual((destination/'models/model.litertlm').read_bytes(),model.read_bytes())
+            self.assertTrue((source/'runtime-cache/keep-source.txt').is_file())
+            self.assertFalse((destination/'runtime-cache/keep-source.txt').exists())
             with self.assertRaises(ValueError):migrate(lib,str(target))
         finally:lib.close()
     def test_migration_copy_failure_keeps_source_and_no_final_destination(self):

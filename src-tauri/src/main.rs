@@ -15,6 +15,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{Manager, State};
 use tauri_plugin_dialog::DialogExt;
 mod updates;
+mod automation;
 
 struct Worker {
     data: PathBuf,
@@ -93,6 +94,13 @@ impl Worker {
             }
         });
         let log_path = data.join("worker.log");
+        // Keep the previous run's log so a crash that triggered a restart is
+        // still diagnosable. Only the last two runs are retained.
+        if log_path.exists() {
+            let previous = data.join("worker.log.1");
+            let _ = std::fs::remove_file(&previous);
+            let _ = std::fs::rename(&log_path, &previous);
+        }
         std::thread::spawn(move || {
             let mut written = 0usize;
             let mut log = std::fs::File::create(log_path).ok();
@@ -117,6 +125,14 @@ impl Worker {
         Ok(worker)
     }
     fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+        self.call_with_timeout(method, params, Duration::from_secs(120))
+    }
+    fn call_with_timeout(
+        &mut self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
         if self.child.try_wait().map_err(|e| e.to_string())?.is_some() {
             return Err("解析Workerが終了しました。アプリを再起動してください。保存済みデータは保持されています。".into());
         }
@@ -125,7 +141,7 @@ impl Worker {
         let payload = json!({"version":1,"id":id,"method":method,"params":params});
         writeln!(self.stdin, "{payload}").map_err(|e| e.to_string())?;
         self.stdin.flush().map_err(|e| e.to_string())?;
-        let line = match self.replies.recv_timeout(Duration::from_secs(120)) {
+        let line = match self.replies.recv_timeout(timeout) {
             Ok(line) => line,
             Err(error) => {
                 let _ = self.child.kill();
@@ -178,6 +194,8 @@ async fn worker_request(
         "pause",
         "search",
         "preview",
+        "reference_preview",
+        "clear_thumbnails",
     ];
     if !METHODS.contains(&method.as_str()) {
         return Err("許可されていない操作です".into());
@@ -198,7 +216,13 @@ async fn choose_path(app: tauri::AppHandle, kind: String) -> Result<Option<Strin
         let picker = app.dialog().file();
         let selection = match kind.as_str() {
             "folder" => picker
-                .set_title("検索対象の写真フォルダーを選択")
+                .set_title("検索対象の写真・音声フォルダーを選択")
+                .blocking_pick_folder(),
+            "storage" => picker
+                .set_title("保存先の移行先フォルダーを選択")
+                .blocking_pick_folder(),
+            "model_dir" => picker
+                .set_title("モデルの保存先フォルダーを選択")
                 .blocking_pick_folder(),
             "image" => picker
                 .set_title("類似画像検索の参照画像")
@@ -245,6 +269,12 @@ async fn open_media(id: u64, reveal: bool, broker: State<'_, Broker>) -> Result<
 struct Desktop {
     background: AtomicBool,
     quitting: AtomicBool,
+    confirming: AtomicBool,
+    running: AtomicBool,
+}
+struct TrayState {
+    pause: MenuItem<tauri::Wry>,
+    resume: MenuItem<tauri::Wry>,
 }
 fn show_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -252,6 +282,37 @@ fn show_window(app: &tauri::AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+fn confirm_quit(app: &tauri::AppHandle) {
+    let desktop = app.state::<Desktop>();
+    if desktop.quitting.load(Ordering::SeqCst)
+        || desktop.confirming.swap(true, Ordering::SeqCst)
+    {
+        return;
+    }
+    if desktop.running.load(Ordering::SeqCst) {
+        let answer = rfd::MessageDialog::new()
+            .set_title("SakuLocaを終了")
+            .set_description("解析中です。処理中の写真または音声区間を保存して解析を停止し、終了します。")
+            .set_level(rfd::MessageLevel::Warning)
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .show();
+        if answer != rfd::MessageDialogResult::Yes {
+            desktop.confirming.store(false, Ordering::SeqCst);
+            return;
+        }
+    }
+    desktop.confirming.store(false, Ordering::SeqCst);
+    quit_safely(app);
+}
+fn restart_worker(app: &tauri::AppHandle) -> Result<(), String> {
+    let broker = app.state::<Broker>();
+    let mut old = broker.lock().map_err(|e| e.to_string())?;
+    let _ = old.child.kill();
+    let _ = old.child.wait();
+    let replacement = Worker::spawn(app, &old.data)?;
+    *old = replacement;
+    Ok(())
 }
 fn quit_safely(app: &tauri::AppHandle) {
     if app.state::<Desktop>().quitting.swap(true, Ordering::SeqCst) {
@@ -293,20 +354,17 @@ async fn desktop_action(app: tauri::AppHandle, action: String) -> Result<Value, 
                 .map_err(|e| e.to_string())?;
         }
         "show" => show_window(&app),
-        "quit" => quit_safely(&app),
+        "quit" => {
+            let handle = app.clone();
+            tauri::async_runtime::spawn_blocking(move || confirm_quit(&handle))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
         "restart_worker" => {
             let handle = app.clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                let broker = handle.state::<Broker>();
-                let mut old = broker.lock().map_err(|e| e.to_string())?;
-                let _ = old.child.kill();
-                let _ = old.child.wait();
-                let replacement = Worker::spawn(&handle, &old.data)?;
-                *old = replacement;
-                Ok::<(), String>(())
-            })
-            .await
-            .map_err(|e| e.to_string())??;
+            tauri::async_runtime::spawn_blocking(move || restart_worker(&handle))
+                .await
+                .map_err(|e| e.to_string())??;
         }
         "log" => {
             let data = app
@@ -324,6 +382,26 @@ async fn desktop_action(app: tauri::AppHandle, action: String) -> Result<Value, 
     }
     Ok(json!({"ok":true}))
 }
+const AUTOSTART_KEY: &str = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+fn registry_run(
+    operation: &str,
+    name: &str,
+    value: Option<&str>,
+) -> Result<std::process::Output, String> {
+    let mut command = Command::new("reg.exe");
+    command.args([operation, AUTOSTART_KEY, "/v", name]);
+    match value {
+        Some(value) => {
+            command.args(["/t", "REG_SZ", "/d", value, "/f"]);
+        }
+        None => {
+            command.arg("/f");
+        }
+    }
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x08000000);
+    command.output().map_err(|e| e.to_string())
+}
 #[tauri::command]
 async fn desktop_preferences(
     app: tauri::AppHandle,
@@ -336,42 +414,25 @@ async fn desktop_preferences(
             return Err("環境変数で保存先を指定している間は自動起動を変更できません。通常起動で設定してください".into());
         }
         let executable = std::env::current_exe().map_err(|e| e.to_string())?;
-        let mut command = Command::new("reg.exe");
+        // v1.0.0 registered the old product name. Remove it so the user never
+        // gets two login entries after upgrading.
+        let _ = registry_run("delete", "LocalPhotoSearch", None);
         if enabled {
-            command.args([
-                "add",
-                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-                "/v",
-                "SakuLoca",
-                "/t",
-                "REG_SZ",
-                "/d",
-            ]);
-            command
-                .arg(format!(
-                    "\"{}\"{}",
-                    executable.display(),
-                    if minimized.unwrap_or(false) {
-                        " --background"
-                    } else {
-                        ""
-                    }
-                ))
-                .arg("/f");
+            let target = format!(
+                "\"{}\"{}",
+                executable.display(),
+                if minimized.unwrap_or(false) {
+                    " --background"
+                } else {
+                    ""
+                }
+            );
+            let result = registry_run("add", "SakuLoca", Some(&target))?;
+            if !result.status.success() {
+                return Err("Windows自動起動を登録できません。ユーザー権限を確認してください".into());
+            }
         } else {
-            command.args([
-                "delete",
-                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-                "/v",
-                "SakuLoca",
-                "/f",
-            ]);
-        }
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
-        let result = command.output().map_err(|e| e.to_string())?;
-        if enabled && !result.status.success() {
-            return Err("Windows自動起動を登録できません。ユーザー権限を確認してください".into());
+            let _ = registry_run("delete", "SakuLoca", None);
         }
     }
     let handle = app.clone();
@@ -402,7 +463,13 @@ async fn migrate_storage(app: tauri::AppHandle, destination: String) -> Result<V
     let result = tauri::async_runtime::spawn_blocking(move || {
         let broker = handle.state::<Broker>();
         let mut worker = broker.lock().map_err(|e| e.to_string())?;
-        let result = worker.call("migrate", json!({"destination":destination}))?;
+        // Verification hashes the model and every thumbnail. Large libraries
+        // legitimately exceed the normal two-minute request timeout.
+        let result = worker.call_with_timeout(
+            "migrate",
+            json!({"destination":destination}),
+            Duration::from_secs(3600),
+        )?;
         let source = worker.data.join("updates.json");
         if source.exists() {
             let bytes = std::fs::read(source).map_err(|e| e.to_string())?;
@@ -436,6 +503,7 @@ fn open_reference(kind: String) -> Result<(), String> {
         "model" => "https://huggingface.co/litert-community/embeddinggemma-2-740m-litert-lm",
         "license" => "https://huggingface.co/google/embeddinggemma-2",
         "releases" => "https://github.com/VIDEdegi/sakuloca/releases",
+        "guide" => "https://blog.videdegi.com/2026/10/sakuloca.html",
         "webview" => "https://developer.microsoft.com/microsoft-edge/webview2/",
         _ => return Err("許可されていないリンクです".into()),
     };
@@ -493,6 +561,8 @@ fn main() {
         .manage(Desktop {
             background: AtomicBool::new(false),
             quitting: AtomicBool::new(false),
+            confirming: AtomicBool::new(false),
+            running: AtomicBool::new(false),
         })
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
@@ -519,7 +589,12 @@ fn main() {
                     .unwrap_or(false),
                 Ordering::SeqCst,
             );
+            app.state::<Desktop>()
+                .running
+                .store(initial["running"] == true, Ordering::SeqCst);
             app.manage(Arc::new(Mutex::new(worker)));
+            // Automation shares this exact broker; it never opens another database/AI engine.
+            automation::start(app.handle(), &data).map_err(std::io::Error::other)?;
             let config = &app.config().app.windows[0];
             let window = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
                 .data_directory(data.join("webview"))
@@ -530,11 +605,16 @@ fn main() {
             {
                 let _ = window.hide();
             }
+            let running = initial["running"] == true;
             let show = MenuItem::with_id(app, "show", "検索ウィンドウを表示", true, None::<&str>)?;
-            let pause = MenuItem::with_id(app, "pause", "解析を一時停止", true, None::<&str>)?;
-            let resume = MenuItem::with_id(app, "start", "差分解析 / 再開", true, None::<&str>)?;
+            let pause = MenuItem::with_id(app, "pause", "解析を一時停止", running, None::<&str>)?;
+            let resume = MenuItem::with_id(app, "start", "差分解析 / 再開", !running, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "完全終了", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &pause, &resume, &quit])?;
+            app.manage(TrayState {
+                pause: pause.clone(),
+                resume: resume.clone(),
+            });
             TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("SakuLoca · 待機中")
@@ -542,7 +622,10 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_window(app),
-                    "quit" => quit_safely(app),
+                    "quit" => {
+                        let handle = app.clone();
+                        std::thread::spawn(move || confirm_quit(&handle));
+                    }
                     "pause" | "start" => {
                         let handle = app.clone();
                         let method = event.id.as_ref().to_owned();
@@ -589,6 +672,14 @@ fn main() {
                                         .unwrap_or(false),
                                     Ordering::SeqCst,
                                 );
+                                let running = status["running"] == true;
+                                handle
+                                    .state::<Desktop>()
+                                    .running
+                                    .store(running, Ordering::SeqCst);
+                                let tray_state = handle.state::<TrayState>();
+                                let _ = tray_state.pause.set_enabled(running);
+                                let _ = tray_state.resume.set_enabled(!running);
                                 if status["preferences"]["auto_update"] == true
                                     && status["preferences"]["manual_pause"] != true
                                     && status["progress"]["phase"] != "error"
@@ -605,18 +696,30 @@ fn main() {
                                                 * 60,
                                         );
                                 }
-                                if status["running"] == true {
-                                    "解析中 · GPU/CPUを使用しています"
+                                if running {
+                                    let processed = status["progress"]["processed"]
+                                        .as_u64()
+                                        .unwrap_or(0);
+                                    let discovered = status["progress"]["discovered"]
+                                        .as_u64()
+                                        .unwrap_or(0);
+                                    if status["analysis_kind"] == "audio" {
+                                        format!("音声解析中 {processed}区間")
+                                    } else if discovered > 0 {
+                                        format!("解析中 {processed}/{discovered}")
+                                    } else {
+                                        "解析中 · GPU/CPUを使用しています".to_owned()
+                                    }
                                 } else if status["progress"]["phase"] == "error" {
-                                    "解析エラー · ウィンドウで確認"
+                                    "解析エラー · ウィンドウで確認".to_owned()
                                 } else {
-                                    "待機中 / 一時停止"
+                                    "待機中 / 一時停止".to_owned()
                                 }
                             }
-                            Err(_) => "Worker停止 · 再起動が必要",
+                            Err(_) => "Worker停止 · 再起動が必要".to_owned(),
                         }
                     } else {
-                        "AI処理中 · GPU/CPUを使用しています"
+                        "AI処理中 · GPU/CPUを使用しています".to_owned()
                     };
                     if let Some(tray) = handle.tray_by_id("main-tray") {
                         let _ = tray.set_tooltip(Some(format!("SakuLoca · {state}")));
@@ -661,7 +764,8 @@ fn main() {
                     let _ = window.hide();
                 }
             } else {
-                quit_safely(app);
+                let handle = app.clone();
+                std::thread::spawn(move || confirm_quit(&handle));
             }
         }
         tauri::RunEvent::ExitRequested { api, .. } => {
