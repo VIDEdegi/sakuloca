@@ -1,0 +1,23 @@
+[
+  {
+    "name": "miniaudio",
+    "version": "1.71",
+    "wheel": "miniaudio-1.71-cp314-cp314-win_amd64.whl",
+    "sha256": "154b085dd914a0e79e3d93160e1a07aacb27d66c65f9ef6a0d87c1a194f32c04",
+    "source": "https://pypi.org/project/miniaudio/1.71/"
+  },
+  {
+    "name": "cffi",
+    "version": "2.1.1",
+    "wheel": "cffi-2.1.1-cp314-cp314-win_amd64.whl",
+    "sha256": "3222ba5d678f80a030e6afbcc33dc1ae5cb45facabb61cee2c7016b8432fde48",
+    "source": "https://pypi.org/project/cffi/2.1.1/"
+  },
+  {
+    "name": "pycparser",
+    "version": "3.12",
+    "wheel": "pycparser-3.12-py3-none-any.whl",
+    "sha256": "a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e",
+    "source": "https://pypi.org/project/pycparser/3.12/"
+  }
+]

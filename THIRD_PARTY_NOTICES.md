@@ -6,14 +6,16 @@ Application code is newly authored for this project. The Google demo is a refere
 - Lit and its runtime dependencies — Google LLC / Lit authors. BSD-3-Clause. See `licenses/npm/` for exact notices.
 - Tauri and Rust dependencies — exact package names, versions, declared licenses, and upstream sources are in `licenses/rust-packages.json`; available license/notice files are in `licenses/rust/`.
 - CPython 3.14.8 — Python Software Foundation and contributors. The complete bundled Python license is in `licenses/python/CPython/`.
-- Pillow 12.3.0 — MIT-CMU, copyright contributors. Complete license/embedded library notices are in `licenses/python/Pillow/`.
+- Pillow 13.0.0 — MIT-CMU, copyright contributors. Complete license/embedded library notices are in `licenses/python/Pillow/`.
+- miniaudio 1.71 — Irmen de Jong (Python bindings), David Reid (miniaudio), Sean Barrett (stb_vorbis). The wheel's complete MIT license is in `licenses/python/miniaudio/`. Used for bounded MP3/FLAC decoding; no playback/capture devices are opened.
+- CFFI 2.1.1 and pycparser 3.12 — their complete wheel licenses are in `licenses/python/cffi/` and `licenses/python/pycparser/`. Pinned decoder package versions are recorded in `licenses/python/audio-decoder-packages.json`.
 - PyInstaller bootloader — GPL with the bootloader exception permitting distribution of the generated application. The full license and exception are in `licenses/python/PyInstaller/`. This is a build tool, not a requirement to install Python on the user's PC. https://pyinstaller.org/en/stable/license.html
 
 The model is not redistributed or included in the installer. Users supply a model obtained under its applicable terms. No Google branding or endorsement is implied.
 
 Development-only Rust/MSVC/SDK/npm/EdgeDriver/Python tooling is not bundled into the app. MSVC/Windows SDK were downloaded from Microsoft with the standalone extraction utility described in docs/PHASE0.md. The utility remains in ignored tools/ and is not redistributed as application code.
 
-These notices accompany version 1.0.0. Independently authored application code is Apache-2.0; see LICENSE and LICENSE_SCOPE.md. Third-party terms below are retained unchanged. Publication has not yet been performed.
+These notices accompany SakuLoca 1.1.0. Independently authored application code is Apache-2.0; see LICENSE and LICENSE_SCOPE.md. Third-party terms below are retained unchanged. See the release records for publication status.
 
 ## v1.0 development audit
 
@@ -31,7 +33,7 @@ The file-level binary inventory is docs/DISTRIBUTION_FILES_CURRENT.json. NSIS 3.
 
 OpenSSL 3.5.9 license is in licenses/native/OpenSSL. CPython runtime components are taken together from the official 3.14.8 distribution, rather than mixing OpenSSL DLLs from another supplier. The exact dot helper derives compensated summation from CPython 3.14.3; PSF terms and its source/modification notice are retained. LiteRT source LICENSE does not prove the complete Windows native wheel SBOM. The unused OpenVINO license folder is a clearly identified reference, not proof of permission to redistribute unidentified binaries.
 
-The application is distributed free of charge with private source, as instructed by its owner. No MIT or Apache license has been applied to independently authored application code.
+The current independently authored application source code and documentation are provided under Apache-2.0, as stated in LICENSE_SCOPE.md. Older development distribution decisions are historical and do not alter third-party terms.
 
 ## Final dev.2 notice additions
 

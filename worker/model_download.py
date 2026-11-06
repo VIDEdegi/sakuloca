@@ -73,7 +73,7 @@ class ModelDownload:
         try:
             offset = self.state['received']
             if offset < MODEL['bytes']:
-                headers = {'User-Agent': 'LocalPhotoSearch/1.0', 'Accept-Encoding': 'identity'}
+                headers = {'User-Agent': 'SakuLoca/1.0', 'Accept-Encoding': 'identity'}
                 if offset:
                     headers['Range'] = f'bytes={offset}-'
                 request = urllib.request.Request(MODEL['url'], headers=headers)

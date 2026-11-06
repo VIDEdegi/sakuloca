@@ -3,11 +3,11 @@ $ErrorActionPreference = 'Stop'
 Push-Location (Split-Path $PSScriptRoot -Parent)
 try {
   if (-not (Test-Path -LiteralPath $env:MEDIA_SEARCH_BUILD_PYTHON)) { throw 'Run scripts/prepare-python-runtime.ps1 before the release build.' }
-  & $env:MEDIA_SEARCH_BUILD_PYTHON -c "import sys,ssl; assert sys.version_info[:3]==(3,14,8); assert ssl.OPENSSL_VERSION.startswith('OpenSSL 3.5.9 ')"
-  if ($LASTEXITCODE -ne 0) { throw 'The audited CPython/OpenSSL runtime is required.' }
+  & $env:MEDIA_SEARCH_BUILD_PYTHON -c "import sys,ssl,importlib.metadata,miniaudio,_cffi_backend; assert sys.version_info[:3]==(3,14,8); assert ssl.OPENSSL_VERSION.startswith('OpenSSL 3.5.9 '); assert importlib.metadata.version('miniaudio')=='1.71'; assert importlib.metadata.version('cffi')=='2.1.1'"
+  if ($LASTEXITCODE -ne 0) { throw 'The pinned CPython/OpenSSL runtime and worker/requirements.txt dependencies are required.' }
   & "$PSScriptRoot/build-search.ps1"
   $nativeBinary = Join-Path (Get-Location).Path 'worker/native/exact-search.dll'
-  & $env:MEDIA_SEARCH_BUILD_PYTHON -m PyInstaller --noconfirm --clean --onedir --name media-search-worker --collect-all litert_lm --add-binary "$nativeBinary;native" --distpath dist-worker --workpath tmp/pyinstaller --specpath tmp worker/main.py
+  & $env:MEDIA_SEARCH_BUILD_PYTHON -m PyInstaller --noconfirm --clean --onedir --name media-search-worker --collect-all litert_lm --hidden-import _cffi_backend --add-binary "$nativeBinary;native" --distpath dist-worker --workpath tmp/pyinstaller --specpath tmp worker/main.py
   if ($LASTEXITCODE -ne 0) { throw 'Worker packaging failed' }
   # UCRT/API sets are OS components on supported Windows 10/11. PyInstaller
   # otherwise discovers unrelated copies on the developer's PATH.

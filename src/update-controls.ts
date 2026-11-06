@@ -29,13 +29,13 @@ export class UpdateControls extends LitElement {
   disconnectedCallback(){this.unlisten?.();super.disconnectedCallback()}
   private async check(startup=false){
     this.busy=true;this.message='更新を確認中…';
-    try{const u=await invoke<{available:boolean;version?:string;notes?:string}>('check_update');this.version=u.version||'';this.notes=u.notes||'';this.message=u.available?`${u.version} に更新できます。`:startup?'':'最新バージョンです。';if(startup&&u.available)alert(`${u.version} に更新できます。「モデルと設定」の「アプリの更新」で変更内容を確認してください。`)}
+    try{const u=await invoke<{available:boolean;version?:string;notes?:string}>('check_update');this.version=u.version||'';this.notes=u.notes||'';this.message=u.available?`${u.version} に更新できます。`:startup?'':'最新バージョンです。';if(startup&&u.available&&this.isConnected)this.dispatchEvent(new CustomEvent('update-found',{detail:{version:u.version||'',notes:u.notes||''},bubbles:true,composed:true}))}
     catch(e){this.message=startup?'':String(e)}finally{this.busy=false}
   }
   private async install(){
     if(!confirm(`${this.version} を取得・署名確認して更新します。解析を保存して停止し、アプリを終了します。続行しますか？`))return;
     this.busy=true;this.message='更新を取得・署名確認しています…';
-    try{await invoke('install_update')}catch(e){this.message=String(e);this.busy=false}
+    try{await invoke('install_update')}catch(e){this.message=String(e);this.busy=false;this.dispatchEvent(new CustomEvent('notify',{detail:{message:String(e)},bubbles:true,composed:true}))}
   }
   private async toggle(value:boolean){
     try{this.automatic=(await invoke<{automatic:boolean}>('update_preferences',{automatic:value})).automatic}catch(e){this.message=String(e)}

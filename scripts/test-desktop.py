@@ -56,7 +56,7 @@ try:
     time.sleep(.5)
     base_width=js("return document.querySelector('media-search-app').shadowRoot.querySelector('#preview img').getBoundingClientRect().width")
     js("document.querySelector('media-search-app').shadowRoot.querySelector('#preview [aria-label=拡大]').click()")
-    report['zoom']=js("return document.querySelector('media-search-app').shadowRoot.querySelector('#preview .preview-tools span').textContent")
+    report['zoom']=wait(lambda:js("return Array.from(document.querySelector('media-search-app').shadowRoot.querySelectorAll('#preview .preview-tools span')).find(s=>s.textContent.trim()==='125%')?.textContent"))
     assert report['zoom']=='125%'
     zoom_width=js("return document.querySelector('media-search-app').shadowRoot.querySelector('#preview img').getBoundingClientRect().width")
     time.sleep(.5)

@@ -19,9 +19,12 @@ jobs:
           python-version: '3.14'
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - run: New-Item -ItemType Directory -Force tmp,dist-worker/media-search-worker | Out-Null
+      - run: node --test scripts/test-mcp.mjs
+      - run: node scripts/test-ui-regressions.mjs
       - run: |
-          New-Item -ItemType Directory -Force tmp,dist-worker/media-search-worker | Out-Null
-          python -m pip install Pillow==12.3.0
+          python -m pip install Pillow==13.0.0 miniaudio==1.71 cffi==2.1.1 pycparser==3.12
+          python scripts/test-audio.py
           python scripts/test-release-foundation.py
           cargo check --locked --manifest-path src-tauri/Cargo.toml
 # No secrets, GPU/model downloads, installers, release publication, or PR-target execution.

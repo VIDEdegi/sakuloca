@@ -65,14 +65,15 @@ try:
     try:request('DELETE',base)
     except Exception:pass
     assert vectors(source)==protected and vectors(migrated)==protected
-    assert (migrated/'runtime-cache/migration-test-note.txt').read_bytes()==(source/'runtime-cache/migration-test-note.txt').read_bytes()
+    assert (migrated/'runtime-cache/migration-test-note.txt').exists() is False
+    assert (source/'runtime-cache/migration-test-note.txt').read_bytes()==b'Preserve source and copied cache notes'
     assert len(list((migrated/'thumbnails').glob('*.jpg')))==len(list((source/'thumbnails').glob('*.jpg')))>0
     base=open_session();request('POST',base+'/timeouts',{'script':120000})
     wait(lambda:js("return !!document.querySelector('media-search-app')?.shadowRoot?.querySelector('#query')"))
     assert Path(rpc('status')['data_path']).resolve()==migrated
     assert rpc('search',{'text':'海辺の風景'})['items'][0]['name']=='coast.png'
     assert user_pointer.read_bytes()==original_pointer
-    report={'native_pointer_migration':True,'relaunched_using_migrated_data':True,'japanese_search_after_migration':True,'four_saved_vectors_identical':True,'source_preserved':True,'cache_note_and_thumbnails_copied':True,'real_user_pointer_unchanged':True,'model_reference_not_copied':not list(migrated.rglob('*.litertlm'))}
+    report={'native_pointer_migration':True,'relaunched_using_migrated_data':True,'japanese_search_after_migration':True,'four_saved_vectors_identical':True,'source_preserved':True,'runtime_cache_not_copied_and_thumbnails_copied':True,'real_user_pointer_unchanged':True,'model_reference_not_copied':not list(migrated.rglob('*.litertlm'))}
     (root/'data/release-tests/native-storage-results.json').write_text(json.dumps(report,indent=2),encoding='utf-8');print(json.dumps(report,indent=2))
 finally:
     try:request('DELETE',base)

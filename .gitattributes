@@ -2,3 +2,4 @@
 licenses/native/LiteRT-third-party/*/LICENSE -text
 licenses/native/WebView2/RUNTIME_EULA.html -text
 licenses/native/WebView2/RUNTIME_EULA.txt -text
+licenses/python/Pillow/LICENSE -text

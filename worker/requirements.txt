@@ -1,2 +1,5 @@
 litert-lm-api==0.18.0
-Pillow==12.3.0
+Pillow==13.0.0
+miniaudio==1.71
+cffi==2.1.1
+pycparser==3.12

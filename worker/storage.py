@@ -18,7 +18,9 @@ def migrate(library, destination):
     if destination.exists():
         raise ValueError('移行先にLocalPhotoSearchDataが存在します。空の別フォルダーを選択してください')
     files = []
-    for directory in ('models', 'thumbnails', 'runtime-cache'):
+    # AI runtime cache is disposable and regenerated on first use; copying it
+    # makes migration slow without preserving search data.
+    for directory in ('models', 'thumbnails'):
         base = source / directory
         if base.is_symlink() or base.is_junction():raise ValueError('保存領域にリンクがあります。移行を中止しました')
         if base.exists():
